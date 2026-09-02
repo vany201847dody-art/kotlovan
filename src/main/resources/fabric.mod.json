@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "kotlovan",
+  "version": "${version}",
+  "name": "Kotlovan",
+  "description": "Чит-мод Котлован v2: Nuker, Fly, Speed, KillAura, Step, Spider и красивое ClickGUI (Правый Shift).",
+  "authors": ["vizor"],
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": {
+    "client": ["ru.kotlovan.mod.KotlovanMod"]
+  },
+  "depends": {
+    "fabricloader": ">=0.14.0",
+    "fabric": "*",
+    "minecraft": "1.16.x",
+    "java": ">=8"
+  }
+}
