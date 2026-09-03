@@ -17,6 +17,7 @@ public class HudRenderer {
 
         modules.clear();
         KotlovanClient k = KotlovanMod.client();
+        if (k.isHideHud()) return;
         if (k.isNuker()) modules.add(new String[]{"Nuker", k.getNukerRadius() + "r"});
         if (k.isFly()) modules.add(new String[]{"Fly", ""});
         if (k.isSpeed()) modules.add(new String[]{"Speed", "x" + fmt(k.getSpeedMul())});
@@ -29,6 +30,12 @@ public class HudRenderer {
         if (k.isSpider()) modules.add(new String[]{"Spider", ""});
         if (k.isAutoTool()) modules.add(new String[]{"AutoTool", ""});
         if (k.isInstantAttack()) modules.add(new String[]{"InstantAttack", ""});
+        if (k.isGlide()) modules.add(new String[]{"Glide", ""});
+        if (k.isLongJump()) modules.add(new String[]{"LongJump", ""});
+        if (k.isCriticals()) modules.add(new String[]{"Criticals", ""});
+        if (k.isAutoSword()) modules.add(new String[]{"AutoSword", ""});
+        if (k.isChestStealer()) modules.add(new String[]{"ChestStealer", ""});
+        if (k.isFreecam()) modules.add(new String[]{"Freecam", ""});
 
         if (modules.isEmpty()) return;
 

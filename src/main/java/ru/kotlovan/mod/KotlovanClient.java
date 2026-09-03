@@ -14,12 +14,17 @@ import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.mob.Monster;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
+import net.minecraft.screen.slot.SlotActionType;
 import net.minecraft.util.Hand;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
+import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
 
+import java.util.ArrayList;
 import java.util.List;
+
+import net.minecraft.entity.decoration.ArmorStandEntity;
 
 public class KotlovanClient {
 
@@ -38,12 +43,31 @@ public class KotlovanClient {
     private boolean spider;
     private boolean autoTool;
     private boolean instantAttack;
+    private boolean glide;
+    private boolean longJump;
+    private boolean criticals;
+    private boolean autoSword;
+    private boolean freecam;
+    private boolean chestStealer;
 
-    // ------ Values ------
+    // ------ Режим скрытия HUD (чтобы в записи/на скрине не светились читы) ------
+    private boolean hideHud = false;
+
+    // ------ Freecam state ------
+    private ArmorStandEntity cameraStand;
+    private Vec3d freecamPlayerPos;
+    private float freecamPlayerYaw;
+    private float freecamPlayerPitch;
+    private boolean wasFlying;
+
+    // ------ Значения ------
     private int nukerRadius = 5;
     private double speedMul = 2.0;
     private double killAuraRange = 4.5;
     private int oldGamma = -1;
+
+    // ------ NameSpoof ------
+    private String spoofName = "";
 
     public void tick() {
         ClientPlayerEntity player = this.mc.player;
@@ -52,10 +76,15 @@ public class KotlovanClient {
                 this.mc.options.gamma = this.oldGamma;
                 this.oldGamma = -1;
             }
+            if (this.freecam) this.disableFreecam();
             return;
         }
 
         this.onKey();
+        if (this.freecam) {
+            this.tickFreecam(player);
+            return;
+        }
         if (this.sprint) this.applySprint(player);
         if (this.noFall) this.applyNoFall(player);
         if (this.step) player.stepHeight = 1.2f;
@@ -63,16 +92,34 @@ public class KotlovanClient {
         if (this.airJump) this.applyAirJump(player);
         if (this.fly) this.applyFly(player);
         if (this.speed) this.applySpeed(player);
+        if (this.glide) this.applyGlide(player);
+        if (this.longJump) this.applyLongJump(player);
         if (this.spider) this.applySpider(player);
         this.applyFullBright(player);
         if (this.nuker) this.doNukerTick(player);
+        if (this.chestStealer) this.tryChestSteal();
         if (this.killAura) this.doKillAura(player);
     }
 
-    // ---------------- NUKER ----------------
+    // ================ NUKER (реальное ломание блоков пакетами) ================
+    private BlockPos nukerCurrent;
+    private int nukerIndex;
+    private List<BlockPos> nukerQueue = new ArrayList<>();
+    private int nukerScanTick;
+
     public void doNukerTick(ClientPlayerEntity player) {
-        // Активируемся при зажатии ПКМ (добыча) — очищаем куб вокруг целевого/своего блока
-        if (!this.mc.options.keyUse.isPressed()) return;
+        if (player == null || this.mc.interactionManager == null) return;
+        // Активируемся при зажатии ПКМ (добыча)
+        boolean active = this.mc.options.keyUse.isPressed();
+        if (!active) {
+            this.nukerCurrent = null;
+            this.nukerQueue.clear();
+            if (this.mc.interactionManager.isBreakingBlock()) {
+                this.mc.interactionManager.cancelBlockBreaking();
+            }
+            return;
+        }
+
         BlockPos center = null;
         if (this.mc.crosshairTarget instanceof net.minecraft.util.hit.BlockHitResult) {
             center = ((net.minecraft.util.hit.BlockHitResult) this.mc.crosshairTarget).getBlockPos();
@@ -80,37 +127,59 @@ public class KotlovanClient {
         if (center == null) {
             center = new BlockPos(player.getPos());
         }
-        this.clearArea(center, player);
-    }
 
-    private void clearArea(BlockPos center, ClientPlayerEntity player) {
-        ClientWorld world = this.mc.world;
-        int r = Math.max(1, Math.min(this.nukerRadius, 8));
-        int count = 0;
-        for (int dx = -r; dx <= r; dx++) {
-            for (int dy = -r; dy <= r; dy++) {
-                for (int dz = -r; dz <= r; dz++) {
-                    BlockPos pos = center.add(dx, dy, dz);
-                    if (pos.equals(new BlockPos(player.getPos()))) continue;
-                    BlockState bs = world.getBlockState(pos);
-                    Block b = bs.getBlock();
-                    if (b.equals(Blocks.BEDROCK) || b.equals(Blocks.AIR)
-                            || b.equals(Blocks.CAVE_AIR) || b.equals(Blocks.VOID_AIR)
-                            || b.equals(Blocks.WATER) || b.equals(Blocks.LAVA)) {
-                        continue;
+        // Пересобираем очередь блоков вокруг цели каждые 20 тиков (дешево)
+        this.nukerScanTick++;
+        if (this.nukerQueue.isEmpty() || this.nukerScanTick >= 20) {
+            this.nukerQueue.clear();
+            int r = Math.max(1, Math.min(this.nukerRadius, 8));
+            for (int dx = -r; dx <= r; dx++) {
+                for (int dy = -r; dy <= r; dy++) {
+                    for (int dz = -r; dz <= r; dz++) {
+                        BlockPos pos = center.add(dx, dy, dz);
+                        BlockState bs = this.mc.world.getBlockState(pos);
+                        Block b = bs.getBlock();
+                        if (bs.isAir() || b.equals(Blocks.BEDROCK)
+                                || b.equals(Blocks.BARRIER)
+                                || b.equals(Blocks.WATER) || b.equals(Blocks.LAVA)) {
+                            continue;
+                        }
+                        this.nukerQueue.add(pos);
                     }
-                    if (this.autoTool) {
-                        int slot = bestSlotFor(world, pos, bs);
-                        if (slot >= 0) player.inventory.selectedSlot = slot;
-                    }
-                    world.setBlockState(pos, Blocks.AIR.getDefaultState(), 3);
-                    count++;
                 }
             }
+            this.nukerScanTick = 0;
+            this.nukerIndex = 0;
         }
-        if (count > 0) {
-            int size = r * 2 + 1;
-            KotlovanMod.chat("Котлован " + size + "x" + size + "x" + size + " очищен (" + count + " блоков)");
+
+        if (this.nukerQueue.isEmpty()) return;
+
+        // Берём первый живой блок в очереди
+        BlockPos target = null;
+        while (this.nukerIndex < this.nukerQueue.size()) {
+            BlockPos p = this.nukerQueue.get(this.nukerIndex);
+            BlockState bs = this.mc.world.getBlockState(p);
+            if (!bs.isAir() && !bs.getBlock().equals(Blocks.BEDROCK)) {
+                target = p;
+                break;
+            }
+            this.nukerIndex++;
+        }
+        if (target == null) return;
+
+        // Реальные пакеты ломания: updateBlockBreakingProgress возвращает true, когда блок сломан
+        if (this.autoTool) {
+            BlockState bs = this.mc.world.getBlockState(target);
+            int slot = bestSlotFor(this.mc.world, target, bs);
+            if (slot >= 0 && slot != player.inventory.selectedSlot) {
+                player.inventory.selectedSlot = slot;
+            }
+        }
+
+        boolean broken = this.mc.interactionManager.updateBlockBreakingProgress(target, Direction.UP);
+        this.nukerCurrent = target;
+        if (broken) {
+            this.nukerIndex++;
         }
     }
 
@@ -132,7 +201,37 @@ public class KotlovanClient {
         return best;
     }
 
-    // ---------------- FLY ----------------
+    // ================ CHEST STEALER ================
+    private int chestStealCooldown = 0;
+
+    private void tryChestSteal() {
+        if (this.mc.player == null || this.mc.interactionManager == null) return;
+        if (chestStealCooldown > 0) { chestStealCooldown--; return; }
+        net.minecraft.screen.ScreenHandler handler = this.mc.player.currentScreenHandler;
+        if (handler == null) return;
+        // Определяем, открыт ли контейнер (не обычный игровой экран без контейнера)
+        int containerSlots = handler.slots.size() - 36;
+        if (containerSlots <= 0) return;
+
+        boolean moved = false;
+        for (int i = 0; i < containerSlots; i++) {
+            try {
+                ItemStack stack = handler.getSlot(i).getStack();
+                if (!stack.isEmpty()) {
+                    this.mc.interactionManager.clickSlot(handler.syncId, i, 0, SlotActionType.QUICK_MOVE, this.mc.player);
+                    moved = true;
+                    chestStealCooldown = 3;
+                    break;
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        if (moved) {
+            KotlovanMod.chat("§aChestStealer: забираю предметы...");
+        }
+    }
+
+    // ================ FLY ================
     private void applyFly(ClientPlayerEntity player) {
         player.abilities.flying = true;
         Vec3d vel = player.getVelocity();
@@ -159,13 +258,13 @@ public class KotlovanClient {
         if (up) my += sp;
         if (down) my -= sp;
 
-        double nx = vel.x * 0.0 + mx;
+        double nx = mx;
         double ny = up || down ? my : (player.isOnGround() ? 0.0 : vel.y);
-        double nz = vel.z * 0.0 + mz;
+        double nz = mz;
         player.setVelocity(nx, ny, nz);
     }
 
-    // ---------------- SPEED ----------------
+    // ================ SPEED ================
     private void applySpeed(ClientPlayerEntity player) {
         if (this.fly) return;
         if (!player.isOnGround()) return;
@@ -178,7 +277,28 @@ public class KotlovanClient {
         player.setVelocity(vel.x * this.speedMul, vel.y, vel.z * this.speedMul);
     }
 
-    // ---------------- AUTO SPRINT ----------------
+    // ================ GLIDE (плавное замедленное падение) ================
+    private void applyGlide(ClientPlayerEntity player) {
+        if (player.isOnGround() || this.mc.options.keyJump.isPressed()) return;
+        Vec3d vel = player.getVelocity();
+        if (vel.y < 0) {
+            player.setVelocity(vel.x, vel.y * 0.55, vel.z);
+        }
+    }
+
+    // ================ LONG JUMP (дальний прыжок) ================
+    private void applyLongJump(ClientPlayerEntity player) {
+        boolean moving = this.mc.options.keyForward.isPressed();
+        if (!moving || !this.mc.options.keyJump.isPressed()) return;
+        if (!player.isOnGround()) return;
+        double yawRad = Math.toRadians(player.getYaw(1.0f));
+        double boost = 2.6 * (this.speed ? this.speedMul : 1.0);
+        double vx = -Math.sin(yawRad) * boost;
+        double vz = Math.cos(yawRad) * boost;
+        player.setVelocity(vx, 0.5, vz);
+    }
+
+    // ================ AUTO SPRINT ================
     private void applySprint(ClientPlayerEntity player) {
         boolean moving = this.mc.options.keyForward.isPressed();
         if (moving && !player.isSneaking()) {
@@ -186,14 +306,14 @@ public class KotlovanClient {
         }
     }
 
-    // ---------------- NO FALL ----------------
+    // ================ NO FALL ================
     private void applyNoFall(ClientPlayerEntity player) {
         if (!player.isOnGround()) {
             player.fallDistance = 0.0f;
         }
     }
 
-    // ---------------- AIR JUMP ----------------
+    // ================ AIR JUMP ================
     private void applyAirJump(ClientPlayerEntity player) {
         if (!player.isOnGround() && this.mc.options.keyJump.isPressed()) {
             Vec3d vel = player.getVelocity();
@@ -202,7 +322,7 @@ public class KotlovanClient {
         }
     }
 
-    // ---------------- SPIDER / WALL CLIMB ----------------
+    // ================ SPIDER / WALL CLIMB ================
     private void applySpider(ClientPlayerEntity player) {
         if (player.horizontalCollision && this.mc.options.keyForward.isPressed()) {
             Vec3d vel = player.getVelocity();
@@ -210,7 +330,7 @@ public class KotlovanClient {
         }
     }
 
-    // ---------------- FULLBRIGHT ----------------
+    // ================ FULLBRIGHT ================
     private void applyFullBright(ClientPlayerEntity player) {
         if (this.fullBright) {
             this.mc.options.gamma = 1000.0;
@@ -219,7 +339,7 @@ public class KotlovanClient {
         }
     }
 
-    // ---------------- KILLAURA (плавная килл-аура) ----------------
+    // ================ KILLAURA (плавная, +Criticals +AutoSword) ================
     private void doKillAura(ClientPlayerEntity player) {
         if (this.mc.interactionManager == null) return;
         Box box = player.getBoundingBox().expand(this.killAuraRange, this.killAuraRange, this.killAuraRange);
@@ -241,15 +361,56 @@ public class KotlovanClient {
         }
         if (target == null) return;
 
+        // AutoSword: выбираем лучший меч-инструмент в хотбаре
+        if (this.autoSword) {
+            int slot = bestMeleeSlot();
+            if (slot >= 0 && slot != player.inventory.selectedSlot) {
+                player.inventory.selectedSlot = slot;
+            }
+        }
+
         // Плавный доворот к цели (без рывков)
         smoothAim(player, target);
 
-        // Атакуем только когда прицел уже близко к цели (плавность, без рывков-подскоков)
+        // Criticals: прыжок перед ударом для крит-урона
+        if (this.criticals && player.isOnGround()) {
+            Vec3d v = player.getVelocity();
+            player.setVelocity(v.x, 0.42, v.z);
+            player.setOnGround(false);
+        }
+
+        // Атакуем только когда прицел уже близко к цели
         if (isAimedAt(player, target, 8.0f)) {
             this.mc.interactionManager.attackEntity(player, target);
             player.swingHand(Hand.MAIN_HAND);
             if (this.instantAttack) player.resetLastAttackedTicks();
         }
+    }
+
+    private int bestMeleeSlot() {
+        if (this.mc.player == null) return -1;
+        int best = -1;
+        float bestScore = -1;
+        for (int i = 0; i < 9; i++) {
+            ItemStack stack = this.mc.player.inventory.getStack(i);
+            if (stack.isEmpty()) continue;
+            float dmg = getItemDamage(stack);
+            if (dmg > bestScore) {
+                bestScore = dmg;
+                best = i;
+            }
+        }
+        return best;
+    }
+
+    private float getItemDamage(ItemStack stack) {
+        if (stack.getItem() instanceof net.minecraft.item.SwordItem) {
+            return ((net.minecraft.item.SwordItem) stack.getItem()).getAttackDamage() + 1.0f;
+        }
+        if (stack.getItem() instanceof net.minecraft.item.AxeItem) {
+            return ((net.minecraft.item.AxeItem) stack.getItem()).getAttackDamage();
+        }
+        return 1.0f;
     }
 
     private boolean isAimedAt(ClientPlayerEntity player, LivingEntity target, float maxDeg) {
@@ -277,7 +438,6 @@ public class KotlovanClient {
         float targetYaw = (float) Math.toDegrees(Math.atan2(-dx, dz));
         float targetPitch = (float) -Math.toDegrees(Math.atan2(dy, Math.max(distXZ, 0.0001)));
 
-        // Скорость плавного поворота (градусов за тик)
         float turnSpeed = 6.0f;
         float newYaw = lerpAngle(player.yaw, targetYaw, turnSpeed);
         float newPitch = lerpFloat(player.pitch, targetPitch, turnSpeed * 0.7f);
@@ -304,7 +464,84 @@ public class KotlovanClient {
         return from + diff;
     }
 
-    // ---------------- TOGGLES ----------------
+    // ================ FREE CAM (камера отлетает от тела, «чтобы не палили») ================
+    private void tickFreecam(ClientPlayerEntity player) {
+        if (this.cameraStand == null) {
+            this.enableFreecam(player);
+            return;
+        }
+        // Тело игрока не двигается
+        if (this.freecamPlayerPos != null) {
+            player.setPosition(this.freecamPlayerPos.x, this.freecamPlayerPos.y, this.freecamPlayerPos.z);
+        }
+        player.setVelocity(0, 0, 0);
+        player.abilities.flying = true;
+        player.noClip = true;
+
+        double sp = 0.6;
+        boolean fwd = this.mc.options.keyForward.isPressed();
+        boolean back = this.mc.options.keyBack.isPressed();
+        boolean left = this.mc.options.keyLeft.isPressed();
+        boolean right = this.mc.options.keyRight.isPressed();
+        boolean up = this.mc.options.keyJump.isPressed();
+        boolean down = this.mc.options.keySneak.isPressed();
+        double yawRad = Math.toRadians(player.yaw);
+
+        double mx = 0, my = 0, mz = 0;
+        if (fwd) { mx += -Math.sin(yawRad) * sp; mz += Math.cos(yawRad) * sp; }
+        if (back) { mx -= -Math.sin(yawRad) * sp; mz -= Math.cos(yawRad) * sp; }
+        if (right) { mx += Math.cos(yawRad) * sp; mz -= Math.sin(yawRad) * sp; }
+        if (left) { mx -= Math.cos(yawRad) * sp; mz += Math.sin(yawRad) * sp; }
+        if (up) my += sp;
+        if (down) my -= sp;
+
+        Vec3d cp = this.cameraStand.getPos();
+        this.cameraStand.setPosition(cp.x + mx, cp.y + my, cp.z + mz);
+    }
+
+    private void enableFreecam(ClientPlayerEntity player) {
+        try {
+            this.wasFlying = player.abilities.flying;
+            this.freecamPlayerPos = player.getPos();
+            this.freecamPlayerYaw = player.yaw;
+            this.freecamPlayerPitch = player.pitch;
+
+            Vec3d p = player.getPos();
+            this.cameraStand = new ArmorStandEntity(this.mc.world, p.x, p.y + 1.6, p.z);
+            this.cameraStand.setNoGravity(true);
+            this.cameraStand.setInvisible(true);
+            this.cameraStand.setSilent(true);
+            this.cameraStand.setInvulnerable(true);
+            this.cameraStand.refreshPositionAndAngles(p.x, p.y + 1.6, p.z, player.yaw, player.pitch);
+
+            this.mc.cameraEntity = this.cameraStand;
+            player.abilities.flying = true;
+            player.noClip = true;
+            KotlovanMod.chat("§aFreecam §aВКЛ");
+        } catch (Exception e) {
+            KotlovanMod.chat("§cFreecam: ошибка запуска");
+        }
+    }
+
+    private void disableFreecam() {
+        try {
+            this.mc.cameraEntity = this.mc.player;
+            if (this.cameraStand != null) {
+                this.cameraStand.remove();
+                this.cameraStand = null;
+            }
+            if (this.mc.player != null) {
+                if (!this.wasFlying) this.mc.player.abilities.flying = false;
+                this.mc.player.noClip = false;
+            }
+            this.freecamPlayerPos = null;
+            this.freecam = false;
+            KotlovanMod.chat("§cFreecam §cВЫКЛ");
+        } catch (Exception ignored) {
+        }
+    }
+
+    // ================ TOGGLES ================
     private void onKey() {
         if (KotlovanMod.NUKER_KEY.wasPressed()) this.toggleNuker();
         if (KotlovanMod.FLY_KEY.wasPressed()) this.toggleFly();
@@ -318,6 +555,14 @@ public class KotlovanClient {
         if (KotlovanMod.SPIDER_KEY.wasPressed()) this.toggleSpider();
         if (KotlovanMod.AUTOTOOL_KEY.wasPressed()) this.toggleAutoTool();
         if (KotlovanMod.INSTANT_KEY.wasPressed()) this.toggleInstantAttack();
+        if (KotlovanMod.GLIDE_KEY.wasPressed()) this.toggleGlide();
+        if (KotlovanMod.LONGJUMP_KEY.wasPressed()) this.toggleLongJump();
+        if (KotlovanMod.CRITICALS_KEY.wasPressed()) this.toggleCriticals();
+        if (KotlovanMod.AUTOSWORD_KEY.wasPressed()) this.toggleAutoSword();
+        if (KotlovanMod.FREECAM_KEY.wasPressed()) this.toggleFreecam();
+        if (KotlovanMod.CHESTSTEAL_KEY.wasPressed()) this.toggleChestStealer();
+        if (KotlovanMod.HIDEHUD_KEY.wasPressed()) this.toggleHideHud();
+        if (KotlovanMod.PANIC_KEY.wasPressed()) this.panic();
     }
 
     public void toggleNuker() { this.nuker = !this.nuker; KotlovanMod.chat("Nuker " + this.on(this.nuker)); }
@@ -344,12 +589,102 @@ public class KotlovanClient {
     public void toggleSpider() { this.spider = !this.spider; KotlovanMod.chat("Spider " + this.on(this.spider)); }
     public void toggleAutoTool() { this.autoTool = !this.autoTool; KotlovanMod.chat("AutoTool " + this.on(this.autoTool)); }
     public void toggleInstantAttack() { this.instantAttack = !this.instantAttack; KotlovanMod.chat("InstantAttack " + this.on(this.instantAttack)); }
+    public void toggleGlide() { this.glide = !this.glide; KotlovanMod.chat("Glide " + this.on(this.glide)); }
+    public void toggleLongJump() { this.longJump = !this.longJump; KotlovanMod.chat("LongJump " + this.on(this.longJump)); }
+    public void toggleCriticals() { this.criticals = !this.criticals; KotlovanMod.chat("Criticals " + this.on(this.criticals)); }
+    public void toggleAutoSword() { this.autoSword = !this.autoSword; KotlovanMod.chat("AutoSword " + this.on(this.autoSword)); }
+    public void toggleChestStealer() { this.chestStealer = !this.chestStealer; KotlovanMod.chat("ChestStealer " + this.on(this.chestStealer)); }
+    public void toggleFreecam() {
+        if (this.freecam) {
+            this.disableFreecam();
+        } else {
+            this.enableFreecam(this.mc.player);
+        }
+    }
+    public void toggleHideHud() { this.hideHud = !this.hideHud; KotlovanMod.chat("Скрыть HUD-модули " + this.on(this.hideHud)); }
+
+    public boolean isHideHud() { return this.hideHud; }
+
+    // ================ ПАНИКА (ТРЕВОГА): выключить всё и спрятать GUI ================
+    public void panic() {
+        this.nuker = false;
+        this.fly = false;
+        this.speed = false;
+        this.sprint = false;
+        this.noFall = false;
+        this.killAura = false;
+        this.fullBright = false;
+        this.step = false;
+        this.airJump = false;
+        this.spider = false;
+        this.autoTool = false;
+        this.instantAttack = false;
+        this.glide = false;
+        this.longJump = false;
+        this.criticals = false;
+        this.autoSword = false;
+        this.chestStealer = false;
+
+        if (this.freecam) this.disableFreecam();
+
+        if (this.mc.player != null) {
+            this.mc.player.abilities.flying = false;
+            this.mc.player.noClip = false;
+            this.mc.player.stepHeight = 0.6f;
+            if (this.mc.options != null && this.mc.options.gamma > 1.0) {
+                this.mc.options.gamma = 0.5;
+            }
+        }
+        // Скрыть GUI, если чит-меню открыто
+        if (this.mc.currentScreen instanceof ClickGuiScreen) {
+            this.mc.openScreen(null);
+        }
+        KotlovanMod.chat("§c⚠ ТРЕВОГА — все читы выключены!");
+    }
+
+    // ================ NameSpoof ================
+    public void setName(String name) {
+        this.spoofName = name;
+    }
+    public String getName() {
+        return this.spoofName;
+    }
+
+    // ================ КОНФИГ ================
+    public void updateConfig() {
+        KotlovanConfig.save(this);
+    }
+    public void loadConfig() {
+        KotlovanConfig.load(this);
+    }
+
+    public void enableConfigLoaded() {}
 
     private String on(boolean b) {
         return b ? "\u00a7a\u0412\u041a\u041b" : "\u00a7c\u0412\u042b\u041a\u041b";
     }
 
-    // ---------------- GETTERS / SETTERS ----------------
+    // ---------------- SETTERS для загрузки конфига ----------------
+    public void setFlyOn(boolean v){ this.fly=v; }
+    public void setSpeedOn(boolean v){ this.speed=v; }
+    public void setNukerOn(boolean v){ this.nuker=v; }
+    public void setKillAuraOn(boolean v){ this.killAura=v; }
+    public void setSprintOn(boolean v){ this.sprint=v; }
+    public void setNoFallOn(boolean v){ this.noFall=v; }
+    public void setFullBrightOn(boolean v){ this.fullBright=v; }
+    public void setStepOn(boolean v){ this.step=v; }
+    public void setAirJumpOn(boolean v){ this.airJump=v; }
+    public void setSpiderOn(boolean v){ this.spider=v; }
+    public void setAutoToolOn(boolean v){ this.autoTool=v; }
+    public void setInstantAttackOn(boolean v){ this.instantAttack=v; }
+    public void setGlideOn(boolean v){ this.glide=v; }
+    public void setLongJumpOn(boolean v){ this.longJump=v; }
+    public void setCriticalsOn(boolean v){ this.criticals=v; }
+    public void setAutoSwordOn(boolean v){ this.autoSword=v; }
+    public void setChestStealerOn(boolean v){ this.chestStealer=v; }
+    public void setHideHudOn(boolean v){ this.hideHud=v; }
+
+    // ---------------- GETTERS ----------------
     public boolean isNuker() { return nuker; }
     public boolean isFly() { return fly; }
     public boolean isSpeed() { return speed; }
@@ -362,6 +697,12 @@ public class KotlovanClient {
     public boolean isSpider() { return spider; }
     public boolean isAutoTool() { return autoTool; }
     public boolean isInstantAttack() { return instantAttack; }
+    public boolean isGlide() { return glide; }
+    public boolean isLongJump() { return longJump; }
+    public boolean isCriticals() { return criticals; }
+    public boolean isAutoSword() { return autoSword; }
+    public boolean isFreecam() { return freecam; }
+    public boolean isChestStealer() { return chestStealer; }
     public int getNukerRadius() { return nukerRadius; }
     public void setNukerRadius(int r) { this.nukerRadius = r; }
     public double getSpeedMul() { return speedMul; }

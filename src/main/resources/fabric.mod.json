@@ -10,6 +10,9 @@
   "entrypoints": {
     "client": ["ru.kotlovan.mod.KotlovanMod"]
   },
+  "mixins": [
+    "kotlovan.mixins.json"
+  ],
   "depends": {
     "fabricloader": ">=0.14.0",
     "fabric": "*",

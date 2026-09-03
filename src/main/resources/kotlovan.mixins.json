@@ -1,0 +1,11 @@
+{
+  "required": true,
+  "package": "ru.kotlovan.mod.mixin",
+  "compatibilityLevel": "JAVA_8",
+  "client": [
+    "PlayerListEntryMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 0
+  }
+}

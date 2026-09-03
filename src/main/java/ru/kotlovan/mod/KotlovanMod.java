@@ -26,9 +26,18 @@ public class KotlovanMod implements ClientModInitializer {
     public static KeyBinding SPIDER_KEY;
     public static KeyBinding AUTOTOOL_KEY;
     public static KeyBinding INSTANT_KEY;
+    public static KeyBinding GLIDE_KEY;
+    public static KeyBinding LONGJUMP_KEY;
+    public static KeyBinding CRITICALS_KEY;
+    public static KeyBinding AUTOSWORD_KEY;
+    public static KeyBinding FREECAM_KEY;
+    public static KeyBinding CHESTSTEAL_KEY;
+    public static KeyBinding HIDEHUD_KEY;
+    public static KeyBinding PANIC_KEY;
     public static KeyBinding GUI_KEY;
 
     private static final KotlovanClient CLIENT = new KotlovanClient();
+    private static boolean configLoaded = false;
 
     public static KotlovanClient client() {
         return CLIENT;
@@ -48,10 +57,22 @@ public class KotlovanMod implements ClientModInitializer {
         SPIDER_KEY = reg("Spider", GLFW.GLFW_KEY_K);
         AUTOTOOL_KEY = reg("AutoTool", GLFW.GLFW_KEY_T);
         INSTANT_KEY = reg("InstantAttack", GLFW.GLFW_KEY_I);
+        GLIDE_KEY = reg("Glide", GLFW.GLFW_KEY_G);
+        LONGJUMP_KEY = reg("LongJump", GLFW.GLFW_KEY_B);
+        CRITICALS_KEY = reg("Criticals", GLFW.GLFW_KEY_Y);
+        AUTOSWORD_KEY = reg("AutoSword", GLFW.GLFW_KEY_LEFT_ALT);
+        FREECAM_KEY = reg("Freecam", GLFW.GLFW_KEY_Z);
+        CHESTSTEAL_KEY = reg("ChestStealer", GLFW.GLFW_KEY_X);
+        HIDEHUD_KEY = reg("Скрыть HUD", GLFW.GLFW_KEY_INSERT);
+        PANIC_KEY = reg("ТРЕВОГА", GLFW.GLFW_KEY_DELETE);
         GUI_KEY = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "Открыть ClickGUI", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_RIGHT_SHIFT, CAT));
 
         ClientTickEvents.END_CLIENT_TICK.register(mc -> {
+            if (!configLoaded) {
+                configLoaded = true;
+                CLIENT.loadConfig();
+            }
             if (mc.world == null || mc.player == null) return;
             CLIENT.tick();
             while (GUI_KEY.wasPressed()) {
