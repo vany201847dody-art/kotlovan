@@ -45,6 +45,9 @@ public class KotlovanMod implements ClientModInitializer {
 
     @Override
     public void onInitializeClient() {
+        // Инициализация нового фреймворка (Nursultan/Delta стиль)
+        Kotlovan.getInstance().init();
+
         NUKER_KEY = reg("Nuker", GLFW.GLFW_KEY_R);
         FLY_KEY = reg("Fly", GLFW.GLFW_KEY_F);
         SPEED_KEY = reg("Speed", GLFW.GLFW_KEY_C);
@@ -75,6 +78,7 @@ public class KotlovanMod implements ClientModInitializer {
             }
             if (mc.world == null || mc.player == null) return;
             CLIENT.tick();
+            handleFrameworkKeys();
             while (GUI_KEY.wasPressed()) {
                 if (mc.currentScreen == null) {
                     mc.openScreen(new ClickGuiScreen());
@@ -83,6 +87,36 @@ public class KotlovanMod implements ClientModInitializer {
         });
 
         HudRenderCallback.EVENT.register(HudRenderer::render);
+    }
+
+    // Клавиши новых модулей нового фреймворка
+    private static KeyBinding KILLAURA_NEW_KEY;
+    private static KeyBinding FLY_NEW_KEY;
+    private static KeyBinding JESUS_NEW_KEY;
+    private static KeyBinding ESP_NEW_KEY;
+    private static KeyBinding TARGETHUD_NEW_KEY;
+
+    private static void handleFrameworkKeys() {
+        if (KILLAURA_NEW_KEY == null) {
+            KILLAURA_NEW_KEY = reg("KillAura [NW]", GLFW.GLFW_KEY_O);
+            FLY_NEW_KEY = reg("Fly [NW]", GLFW.GLFW_KEY_Q);
+            JESUS_NEW_KEY = reg("Jesus [NW]", GLFW.GLFW_KEY_ENTER);
+            ESP_NEW_KEY = reg("ESP [NW]", GLFW.GLFW_KEY_E);
+            TARGETHUD_NEW_KEY = reg("TargetHUD [NW]", GLFW.GLFW_KEY_M);
+        }
+        ru.kotlovan.mod.module.ModuleManager mm = ru.kotlovan.mod.module.ModuleManager.getInstance();
+        if (KILLAURA_NEW_KEY.wasPressed()) toggle(mm, "KillAura");
+        if (FLY_NEW_KEY.wasPressed()) toggle(mm, "Fly");
+        if (JESUS_NEW_KEY.wasPressed()) toggle(mm, "Jesus");
+        if (ESP_NEW_KEY.wasPressed()) toggle(mm, "ESP");
+        if (TARGETHUD_NEW_KEY.wasPressed()) toggle(mm, "TargetHUD");
+    }
+
+    private static void toggle(ru.kotlovan.mod.module.ModuleManager mm, String name) {
+        ru.kotlovan.mod.module.Module m = mm.getByName(name);
+        if (m != null) {
+            m.toggle();
+        }
     }
 
     private static KeyBinding reg(String name, int key) {

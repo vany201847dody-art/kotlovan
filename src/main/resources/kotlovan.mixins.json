@@ -6,7 +6,8 @@
     "PlayerListEntryMixin",
     "BlockRenderManagerMixin",
     "ParticleManagerMixin",
-    "WorldRendererMixin"
+    "WorldRendererMixin",
+    "InGameHudMixin"
   ],
   "injectors": {
     "defaultRequire": 0

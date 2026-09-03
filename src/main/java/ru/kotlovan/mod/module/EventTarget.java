@@ -1,0 +1,14 @@
+package ru.kotlovan.mod.module;
+
+import ru.kotlovan.mod.event.Event;
+
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
+
+@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.METHOD)
+public @interface EventTarget {
+    Event.Priority priority() default Event.Priority.NORMAL;
+}
