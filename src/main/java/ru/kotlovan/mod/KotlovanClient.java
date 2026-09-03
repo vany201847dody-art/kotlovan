@@ -508,13 +508,23 @@ public class KotlovanClient {
             this.enableFreecam(player);
             return;
         }
-        // Тело игрока не двигается
+        // Тело игрока замирает на месте (не двигаем физически), но смотрит мышью
         if (this.freecamPlayerPos != null) {
             player.setPosition(this.freecamPlayerPos.x, this.freecamPlayerPos.y, this.freecamPlayerPos.z);
         }
         player.setVelocity(0, 0, 0);
         player.abilities.flying = true;
         player.noClip = true;
+
+        // Ключевой фикс: мышь уже обновила player.yaw/pitch НА ЭТОТ кадр,
+        // а камера смотрит из cameraStand (cameraEntity). Копируем поворот
+        // на stand, иначе камеру нельзя крутить мышью (была заморожена).
+        this.cameraStand.yaw = player.yaw;
+        this.cameraStand.pitch = player.pitch;
+        this.cameraStand.headYaw = player.yaw;
+        this.cameraStand.bodyYaw = player.yaw;
+        this.cameraStand.prevYaw = player.yaw;
+        this.cameraStand.prevPitch = player.pitch;
 
         double sp = 0.6;
         boolean fwd = this.mc.options.keyForward.isPressed();
@@ -523,6 +533,7 @@ public class KotlovanClient {
         boolean right = this.mc.options.keyRight.isPressed();
         boolean up = this.mc.options.keyJump.isPressed();
         boolean down = this.mc.options.keySneak.isPressed();
+        // Движение по направлению взгляда КАМЕРЫ (player.yaw == взгляд)
         double yawRad = Math.toRadians(player.yaw);
 
         double mx = 0, my = 0, mz = 0;
@@ -535,6 +546,7 @@ public class KotlovanClient {
 
         Vec3d cp = this.cameraStand.getPos();
         this.cameraStand.setPosition(cp.x + mx, cp.y + my, cp.z + mz);
+        this.cameraStand.refreshPositionAndAngles(cp.x + mx, cp.y + my, cp.z + mz, this.cameraStand.yaw, this.cameraStand.pitch);
     }
 
     private void enableFreecam(ClientPlayerEntity player) {
@@ -550,6 +562,10 @@ public class KotlovanClient {
             this.cameraStand.setInvisible(true);
             this.cameraStand.setSilent(true);
             this.cameraStand.setInvulnerable(true);
+            this.cameraStand.yaw = player.yaw;
+            this.cameraStand.pitch = player.pitch;
+            this.cameraStand.headYaw = player.yaw;
+            this.cameraStand.bodyYaw = player.yaw;
             this.cameraStand.refreshPositionAndAngles(p.x, p.y + 1.6, p.z, player.yaw, player.pitch);
 
             this.mc.cameraEntity = this.cameraStand;
