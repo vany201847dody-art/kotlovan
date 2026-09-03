@@ -3,7 +3,10 @@
   "package": "ru.kotlovan.mod.mixin",
   "compatibilityLevel": "JAVA_8",
   "client": [
-    "PlayerListEntryMixin"
+    "PlayerListEntryMixin",
+    "BlockRenderManagerMixin",
+    "ParticleManagerMixin",
+    "WorldRendererMixin"
   ],
   "injectors": {
     "defaultRequire": 0

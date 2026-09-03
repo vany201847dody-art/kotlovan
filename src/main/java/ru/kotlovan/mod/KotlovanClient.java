@@ -50,6 +50,19 @@ public class KotlovanClient {
     private boolean freecam;
     private boolean chestStealer;
 
+    // ------ Новые модули ------
+    private boolean timer;
+    private boolean velocity;
+    private boolean noWeb;
+    private boolean fastLadder;
+    private boolean safeWalk;
+    private boolean esp;
+    private boolean tracers;
+    private boolean xray;
+    private boolean noRender;
+    private int timerMul = 2;
+    private double velocityReduce = 0.8;
+
     // ------ Режим скрытия HUD (чтобы в записи/на скрине не светились читы) ------
     private boolean hideHud = false;
 
@@ -99,6 +112,29 @@ public class KotlovanClient {
         if (this.nuker) this.doNukerTick(player);
         if (this.chestStealer) this.tryChestSteal();
         if (this.killAura) this.doKillAura(player);
+        if (this.velocity) this.applyVelocity(player);
+        if (this.noWeb) this.applyNoWeb(player);
+        if (this.fastLadder && player.isClimbing()) {
+            Vec3d v = player.getVelocity();
+            player.setVelocity(v.x, 0.22, v.z);
+        }
+        if (this.safeWalk) {
+            player.setVelocity(player.getVelocity());
+        }
+    }
+
+    // ================ VELOCITY (анти-отброс) ================
+    private void applyVelocity(ClientPlayerEntity player) {
+        Vec3d v = player.getVelocity();
+        if (Math.abs(v.y) < 0.3 && v.y < 0) v = new Vec3d(v.x, v.y * (1.0 - this.velocityReduce), v.z);
+        player.setVelocity(v.x * (1.0 - this.velocityReduce * 0.5), v.y, v.z * (1.0 - this.velocityReduce * 0.5));
+    }
+
+    // ================ NO WEB (не вязнуть в паутине) ================
+    private void applyNoWeb(ClientPlayerEntity player) {
+        player.stepHeight = 1.2f;
+        Vec3d v = player.getVelocity();
+        player.setVelocity(v.x * 0.98, v.y, v.z * 0.98);
     }
 
     // ================ NUKER (реальное ломание блоков пакетами) ================
@@ -237,6 +273,7 @@ public class KotlovanClient {
         Vec3d vel = player.getVelocity();
         double sp = 0.4;
         if (this.speed) sp *= this.speedMul;
+        if (this.timer) sp *= this.timerMul;
         boolean fwd = this.mc.options.keyForward.isPressed();
         boolean back = this.mc.options.keyBack.isPressed();
         boolean left = this.mc.options.keyLeft.isPressed();
@@ -274,7 +311,8 @@ public class KotlovanClient {
                 || this.mc.options.keyRight.isPressed();
         if (!moving) return;
         Vec3d vel = player.getVelocity();
-        player.setVelocity(vel.x * this.speedMul, vel.y, vel.z * this.speedMul);
+        double tm = this.timer ? this.timerMul : 1.0;
+        player.setVelocity(vel.x * this.speedMul * tm, vel.y, vel.z * this.speedMul * tm);
     }
 
     // ================ GLIDE (плавное замедленное падение) ================
@@ -602,6 +640,15 @@ public class KotlovanClient {
         }
     }
     public void toggleHideHud() { this.hideHud = !this.hideHud; KotlovanMod.chat("Скрыть HUD-модули " + this.on(this.hideHud)); }
+    public void toggleTimer() { this.timer = !this.timer; KotlovanMod.chat("Timer x" + this.timerMul + " " + this.on(this.timer)); }
+    public void toggleVelocity() { this.velocity = !this.velocity; KotlovanMod.chat("Velocity " + this.on(this.velocity)); }
+    public void toggleNoWeb() { this.noWeb = !this.noWeb; KotlovanMod.chat("NoWeb " + this.on(this.noWeb)); }
+    public void toggleFastLadder() { this.fastLadder = !this.fastLadder; KotlovanMod.chat("FastLadder " + this.on(this.fastLadder)); }
+    public void toggleSafeWalk() { this.safeWalk = !this.safeWalk; KotlovanMod.chat("SafeWalk " + this.on(this.safeWalk)); }
+    public void toggleEsp() { this.esp = !this.esp; KotlovanMod.chat("ESP " + this.on(this.esp)); }
+    public void toggleTracers() { this.tracers = !this.tracers; KotlovanMod.chat("Tracers " + this.on(this.tracers)); }
+    public void toggleXray() { this.xray = !this.xray; KotlovanMod.chat("X-Ray " + this.on(this.xray)); }
+    public void toggleNoRender() { this.noRender = !this.noRender; KotlovanMod.chat("NoRender " + this.on(this.noRender)); }
 
     public boolean isHideHud() { return this.hideHud; }
 
@@ -624,6 +671,15 @@ public class KotlovanClient {
         this.criticals = false;
         this.autoSword = false;
         this.chestStealer = false;
+        this.timer = false;
+        this.velocity = false;
+        this.noWeb = false;
+        this.fastLadder = false;
+        this.safeWalk = false;
+        this.esp = false;
+        this.tracers = false;
+        this.xray = false;
+        this.noRender = false;
 
         if (this.freecam) this.disableFreecam();
 
@@ -683,6 +739,15 @@ public class KotlovanClient {
     public void setAutoSwordOn(boolean v){ this.autoSword=v; }
     public void setChestStealerOn(boolean v){ this.chestStealer=v; }
     public void setHideHudOn(boolean v){ this.hideHud=v; }
+    public void setTimerOn(boolean v){ this.timer=v; }
+    public void setVelocityOn(boolean v){ this.velocity=v; }
+    public void setNoWebOn(boolean v){ this.noWeb=v; }
+    public void setFastLadderOn(boolean v){ this.fastLadder=v; }
+    public void setSafeWalkOn(boolean v){ this.safeWalk=v; }
+    public void setEspOn(boolean v){ this.esp=v; }
+    public void setTracersOn(boolean v){ this.tracers=v; }
+    public void setXrayOn(boolean v){ this.xray=v; }
+    public void setNoRenderOn(boolean v){ this.noRender=v; }
 
     // ---------------- GETTERS ----------------
     public boolean isNuker() { return nuker; }
@@ -703,6 +768,19 @@ public class KotlovanClient {
     public boolean isAutoSword() { return autoSword; }
     public boolean isFreecam() { return freecam; }
     public boolean isChestStealer() { return chestStealer; }
+    public boolean isTimer() { return timer; }
+    public boolean isVelocity() { return velocity; }
+    public boolean isNoWeb() { return noWeb; }
+    public boolean isFastLadder() { return fastLadder; }
+    public boolean isSafeWalk() { return safeWalk; }
+    public boolean isEsp() { return esp; }
+    public boolean isTracers() { return tracers; }
+    public boolean isXray() { return xray; }
+    public boolean isNoRender() { return noRender; }
+    public int getTimerMul() { return timerMul; }
+    public void setTimerMul(int m) { this.timerMul = Math.max(1, Math.min(10, m)); }
+    public double getVelocityReduce() { return velocityReduce; }
+    public void setVelocityReduce(double v) { this.velocityReduce = v; }
     public int getNukerRadius() { return nukerRadius; }
     public void setNukerRadius(int r) { this.nukerRadius = r; }
     public double getSpeedMul() { return speedMul; }

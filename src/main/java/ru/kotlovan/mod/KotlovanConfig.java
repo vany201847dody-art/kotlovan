@@ -42,9 +42,19 @@ public class KotlovanConfig {
                 w.write("autosword=" + k.isAutoSword() + "\n");
                 w.write("cheststealer=" + k.isChestStealer() + "\n");
                 w.write("hidehud=" + k.isHideHud() + "\n");
+                w.write("timer=" + k.isTimer() + "\n");
+                w.write("velocity=" + k.isVelocity() + "\n");
+                w.write("noweb=" + k.isNoWeb() + "\n");
+                w.write("fastladder=" + k.isFastLadder() + "\n");
+                w.write("safewalk=" + k.isSafeWalk() + "\n");
+                w.write("esp=" + k.isEsp() + "\n");
+                w.write("tracers=" + k.isTracers() + "\n");
+                w.write("xray=" + k.isXray() + "\n");
+                w.write("norender=" + k.isNoRender() + "\n");
                 w.write("nukerRadius=" + k.getNukerRadius() + "\n");
                 w.write("speedMul=" + k.getSpeedMul() + "\n");
                 w.write("killAuraRange=" + k.getKillAuraRange() + "\n");
+                w.write("timerMul=" + k.getTimerMul() + "\n");
                 w.write("name=" + k.getName() + "\n");
             }
         } catch (Exception ignored) {
@@ -91,9 +101,19 @@ public class KotlovanConfig {
                 case "autosword": k.setAutoSwordOn(b); break;
                 case "cheststealer": k.setChestStealerOn(b); break;
                 case "hidehud": k.setHideHudOn(b); break;
+                case "timer": k.setTimerOn(b); break;
+                case "velocity": k.setVelocityOn(b); break;
+                case "noweb": k.setNoWebOn(b); break;
+                case "fastladder": k.setFastLadderOn(b); break;
+                case "safewalk": k.setSafeWalkOn(b); break;
+                case "esp": k.setEspOn(b); break;
+                case "tracers": k.setTracersOn(b); break;
+                case "xray": k.setXrayOn(b); break;
+                case "norender": k.setNoRenderOn(b); break;
                 case "nukerRadius": k.setNukerRadius(Integer.parseInt(val)); break;
                 case "speedMul": k.setSpeedMul(Double.parseDouble(val)); break;
                 case "killAuraRange": k.setKillAuraRange(Double.parseDouble(val)); break;
+                case "timerMul": k.setTimerMul(Integer.parseInt(val)); break;
                 case "name": k.setName(val); break;
                 default: break;
             }

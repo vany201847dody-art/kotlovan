@@ -36,6 +36,15 @@ public class HudRenderer {
         if (k.isAutoSword()) modules.add(new String[]{"AutoSword", ""});
         if (k.isChestStealer()) modules.add(new String[]{"ChestStealer", ""});
         if (k.isFreecam()) modules.add(new String[]{"Freecam", ""});
+        if (k.isTimer()) modules.add(new String[]{"Timer", "x" + k.getTimerMul()});
+        if (k.isVelocity()) modules.add(new String[]{"Velocity", ""});
+        if (k.isNoWeb()) modules.add(new String[]{"NoWeb", ""});
+        if (k.isFastLadder()) modules.add(new String[]{"FastLadder", ""});
+        if (k.isSafeWalk()) modules.add(new String[]{"SafeWalk", ""});
+        if (k.isEsp()) modules.add(new String[]{"ESP", ""});
+        if (k.isTracers()) modules.add(new String[]{"Tracers", ""});
+        if (k.isXray()) modules.add(new String[]{"X-Ray", ""});
+        if (k.isNoRender()) modules.add(new String[]{"NoRender", ""});
 
         if (modules.isEmpty()) return;
 
